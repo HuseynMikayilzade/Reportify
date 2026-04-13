@@ -14,34 +14,54 @@ Notifications.setNotificationHandler({
 
 export const NotificationService = {
   async requestPermissions(): Promise<boolean> {
-    if (Platform.OS === 'android') return true;
-    const { status } = await Notifications.requestPermissionsAsync();
-    return status === 'granted';
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      return finalStatus === 'granted';
+    } catch (error) {
+      console.warn('Notification permissions request failed (likely Expo Go limitation):', error);
+      return false;
+    }
   },
 
+
   async scheduleDailyReminder(hour: number = 20, minute: number = 0): Promise<void> {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "📋 Don't forget your report",
-        body: "You haven't submitted today's report yet.",
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour,
-        minute,
-      },
-    });
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "📋 Don't forget your report",
+          body: "You haven't submitted today's report yet.",
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour,
+          minute,
+        },
+      });
+    } catch (error) {
+      console.warn('Failed to schedule daily reminder:', error);
+    }
   },
 
   async showSyncSuccess(count: number): Promise<void> {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '✅ Reports synced',
-        body: `${count} report${count > 1 ? 's' : ''} successfully synced.`,
-      },
-      trigger: null, // immediate
-    });
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '✅ Reports synced',
+          body: `${count} report${count > 1 ? 's' : ''} successfully synced.`,
+        },
+        trigger: null, // immediate
+      });
+    } catch (error) {
+      console.warn('Failed to show sync notification:', error);
+    }
   },
 
   async cancelAll(): Promise<void> {

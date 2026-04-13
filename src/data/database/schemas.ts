@@ -7,6 +7,7 @@ export const Tables = {
   TEMPLATES: 'templates',
   TEMPLATE_PRODUCTS: 'template_products',
   TEMPLATE_EXPENSES: 'template_expenses',
+  EXPENSES: 'expenses',
   REPORT_STOCK: 'report_stock',
   REPORT_SALES: 'report_sales',
   REPORT_EXPENSES: 'report_expenses',
@@ -59,6 +60,15 @@ export const CREATE_PRODUCTS_TABLE = `
     product_type TEXT NOT NULL,
     category TEXT NOT NULL,
     price REAL NOT NULL,
+    is_active INTEGER NOT NULL
+  );
+`;
+
+export const CREATE_EXPENSES_TABLE = `
+  CREATE TABLE IF NOT EXISTS ${Tables.EXPENSES} (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    description_required INTEGER NOT NULL,
     is_active INTEGER NOT NULL
   );
 `;

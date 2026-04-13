@@ -14,6 +14,9 @@ import { Toast } from '../../components/Toast';
 import { Colors, Spacing, BorderRadius } from '../../../theme';
 import { UserRole } from '../../../domain/entities/UserRole';
 import { formatTimestamp } from '../../../utils/dates';
+import TabIconConfigScreen from './TabIconConfigScreen';
+
+type SettingsView = 'settings' | 'icon-config';
 
 function roleBadgeVariant(role: UserRole): BadgeVariant {
   if (role === UserRole.SuperAdmin) return 'superAdmin';
@@ -62,7 +65,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function ProfileScreen() {
+export default function SettingsScreen() {
+
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuthStore();
   const { sync, isSyncing, lastSyncAt, pendingCount } = useSyncStore();
@@ -71,6 +75,9 @@ export default function ProfileScreen() {
   const [toast, setToast] = useState<{ visible: boolean; type: 'success' | 'error'; msg: string }>({
     visible: false, type: 'success', msg: '',
   });
+
+  // Internal navigation for sub-screens
+  const [view, setView] = useState<SettingsView>('settings');
 
   const handleLogout = () => {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
@@ -95,6 +102,22 @@ export default function ProfileScreen() {
   };
 
   if (!user) return null;
+
+  // Icon config sub-screen
+  if (view === 'icon-config') {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <View style={styles.subHeader}>
+          <TouchableOpacity onPress={() => setView('settings')} style={styles.backBtn}>
+            <Text style={styles.backIcon}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.subTitle}>Tab Icons</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <TabIconConfigScreen />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -173,6 +196,15 @@ export default function ProfileScreen() {
           />
         </View>
 
+        {/* Navigation Preferences */}
+        <Text style={styles.sectionLabel}>Navigation</Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={setting.navRow} onPress={() => setView('icon-config')}>
+            <Text style={setting.label}>Tab Icons</Text>
+            <Text style={setting.chevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Sign out */}
         <Button
           label="Sign out"
@@ -240,6 +272,24 @@ const styles = StyleSheet.create({
     textAlign: 'center', fontSize: 10,
     color: Colors.textMuted, marginTop: Spacing.s4,
   },
+  // Sub-screen header (matches ManagementScreen pattern)
+  subHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.screenH,
+    paddingVertical: Spacing.s3,
+    backgroundColor: Colors.bg,
+    borderBottomWidth: 0.5,
+    borderBottomColor: Colors.border,
+  },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: Colors.overlay,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  backIcon: { fontSize: 24, color: Colors.textSecondary, marginTop: -2 },
+  subTitle: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
 });
 
 const setting = StyleSheet.create({
@@ -249,6 +299,13 @@ const setting = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 13,
   },
+  navRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
   label: { fontSize: 14, color: Colors.textSecondary },
   value: { fontSize: 13, color: Colors.textMuted },
+  chevron: { fontSize: 18, color: Colors.textMuted },
 });

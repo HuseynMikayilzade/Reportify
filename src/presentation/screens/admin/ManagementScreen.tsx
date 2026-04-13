@@ -1,35 +1,83 @@
 // Management Hub Screen
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity,
+  TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, BorderRadius } from '../../../theme';
 import TemplateManagementScreen from './TemplateManagementScreen';
+import ProductManagementScreen from './ProductManagementScreen';
+import ExpenseManagementScreen from './ExpenseManagementScreen';
+import { TemplateRepository } from '../../../data/repositories/TemplateRepository';
+import { ProductRepository } from '../../../data/repositories/ProductRepository';
+import { Template } from '../../../domain/entities/Template';
 
+// ---------------------------------------------------------------------------
+// Branch list — static for now, ready for API integration
+// ---------------------------------------------------------------------------
+const BRANCHES = ['Central', 'North', 'South'];
 
-type ManagementView = 'list' | 'template' | 'products' | 'team';
+type ManagementView =
+  | 'list'
+  | 'template-branches'   // entry: branch selection cards
+  | 'template-editor'     // editor: edit/create template for a specific branch
+  | 'products'
+  | 'expenses'
+  | 'team';
 
 export default function ManagementScreen() {
   const insets = useSafeAreaInsets();
   const [view, setView] = useState<ManagementView>('list');
 
-  const renderBackBtn = () => (
-    <TouchableOpacity onPress={() => setView('list')} style={styles.backBtn}>
+  // Selected branch when navigating into the editor
+  const [activeBranch, setActiveBranch] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Shared back button
+  // ---------------------------------------------------------------------------
+  const renderBackBtn = (target: ManagementView) => (
+    <TouchableOpacity onPress={() => setView(target)} style={styles.backBtn}>
       <Text style={styles.backIcon}>‹</Text>
     </TouchableOpacity>
   );
 
-  if (view === 'template') {
+  // ---------------------------------------------------------------------------
+  // Branch list → editor
+  // ---------------------------------------------------------------------------
+  const openEditor = (branch: string) => {
+    setActiveBranch(branch);
+    setView('template-editor');
+  };
+
+  // ---------------------------------------------------------------------------
+  // VIEWS
+  // ---------------------------------------------------------------------------
+
+  // Template editor (locked — editor component is unchanged)
+  if (view === 'template-editor' && activeBranch) {
     return (
       <View style={{ flex: 1 }}>
         <View style={[styles.subHeader, { paddingTop: insets.top }]}>
-          {renderBackBtn()}
+          {renderBackBtn('template-branches')}
+          <Text style={styles.subTitle}>{activeBranch}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <TemplateManagementScreen branch={activeBranch} />
+      </View>
+    );
+  }
+
+  // Branch selection cards (entry screen for Template Management)
+  if (view === 'template-branches') {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={[styles.subHeader, { paddingTop: insets.top }]}>
+          {renderBackBtn('list')}
           <Text style={styles.subTitle}>Templates</Text>
           <View style={{ width: 40 }} />
         </View>
-        <TemplateManagementScreen />
+        <BranchListView onSelectBranch={openEditor} />
       </View>
     );
   }
@@ -38,11 +86,24 @@ export default function ManagementScreen() {
     return (
       <View style={{ flex: 1 }}>
         <View style={[styles.subHeader, { paddingTop: insets.top }]}>
-          {renderBackBtn()}
+          {renderBackBtn('list')}
           <Text style={styles.subTitle}>Products</Text>
           <View style={{ width: 40 }} />
         </View>
-        <PlaceholderScreen title="Product Management" description="Full master data management and pricing controls coming soon." />
+        <ProductManagementScreen />
+      </View>
+    );
+  }
+
+  if (view === 'expenses') {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={[styles.subHeader, { paddingTop: insets.top }]}>
+          {renderBackBtn('list')}
+          <Text style={styles.subTitle}>Expenses</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <ExpenseManagementScreen />
       </View>
     );
   }
@@ -51,7 +112,7 @@ export default function ManagementScreen() {
     return (
       <View style={{ flex: 1 }}>
         <View style={[styles.subHeader, { paddingTop: insets.top }]}>
-          {renderBackBtn()}
+          {renderBackBtn('list')}
           <Text style={styles.subTitle}>Team</Text>
           <View style={{ width: 40 }} />
         </View>
@@ -60,6 +121,9 @@ export default function ManagementScreen() {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Hub list (root)
+  // ---------------------------------------------------------------------------
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -69,22 +133,27 @@ export default function ManagementScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <Text style={styles.sectionLabel}>Operations</Text>
         <View style={styles.card}>
-          <ManagementRow 
-            label="Template Management" 
-            onPress={() => setView('template')} 
+          <ManagementRow
+            label="Template Management"
+            onPress={() => setView('template-branches')}
           />
           <View style={styles.divider} />
-          <ManagementRow 
-            label="Products" 
-            onPress={() => setView('products')} 
+          <ManagementRow
+            label="Products"
+            onPress={() => setView('products')}
           />
           <View style={styles.divider} />
-          <ManagementRow 
-            label="Team" 
-            onPress={() => setView('team')} 
+          <ManagementRow
+            label="Expenses"
+            onPress={() => setView('expenses')}
+          />
+          <View style={styles.divider} />
+          <ManagementRow
+            label="Team"
+            onPress={() => setView('team')}
           />
         </View>
-        
+
         <Text style={styles.hint}>
           Manage your branches, staff and product catalog for consistent reporting.
         </Text>
@@ -93,6 +162,73 @@ export default function ManagementScreen() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Branch selection card list
+// Loads template status per branch — shows name if exists, warning if not
+// ---------------------------------------------------------------------------
+function BranchListView({ onSelectBranch }: { onSelectBranch: (branch: string) => void }) {
+  const productRepo = new ProductRepository();
+  const templateRepo = new TemplateRepository(productRepo);
+
+  const [templateMap, setTemplateMap] = useState<Record<string, Template | null>>({});
+  const [loading, setLoading] = useState(true);
+
+  const loadTemplates = useCallback(async () => {
+    setLoading(true);
+    const results: Record<string, Template | null> = {};
+    for (const branch of BRANCHES) {
+      results[branch] = await templateRepo.getTemplateByBranch(branch);
+    }
+    setTemplateMap(results);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator color={Colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.branchScroll}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={styles.sectionLabel}>Select a branch to manage its template</Text>
+      {BRANCHES.map((branch) => {
+        const template = templateMap[branch];
+        return (
+          <TouchableOpacity
+            key={branch}
+            style={styles.branchCard}
+            onPress={() => onSelectBranch(branch)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.branchCardContent}>
+              <Text style={styles.branchName}>{branch}</Text>
+              {template ? (
+                <Text style={styles.templateName}>{template.name}</Text>
+              ) : (
+                <Text style={styles.templateMissing}>Template yoxdur</Text>
+              )}
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared sub-components
+// ---------------------------------------------------------------------------
 function ManagementRow({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <TouchableOpacity onPress={onPress} style={styles.row}>
@@ -112,8 +248,12 @@ function PlaceholderScreen({ title, description }: { title: string; description:
   );
 }
 
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
     paddingHorizontal: Spacing.screenH,
     paddingTop: Spacing.s4,
@@ -147,7 +287,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted, marginTop: Spacing.s8,
     paddingHorizontal: 40,
   },
-  // Sub-navigation styles
+  // Sub-nav header
   subHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -165,7 +305,7 @@ const styles = StyleSheet.create({
   },
   backIcon: { fontSize: 24, color: Colors.textSecondary, marginTop: -2 },
   subTitle: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
-  // Placeholder styles
+  // Placeholder
   placeholder: {
     flex: 1, backgroundColor: Colors.bg,
     alignItems: 'center', justifyContent: 'center',
@@ -174,4 +314,21 @@ const styles = StyleSheet.create({
   placeholderIcon: { fontSize: 48, marginBottom: 20 },
   placeholderTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary, marginBottom: 8 },
   placeholderDesc: { fontSize: 14, color: Colors.textMuted, textAlign: 'center', lineHeight: 20 },
+  // Branch cards
+  branchScroll: { padding: Spacing.screenH, paddingBottom: 100 },
+  branchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 0.5,
+    borderColor: Colors.border,
+    padding: 16,
+    marginBottom: 10,
+  },
+  branchCardContent: { flex: 1 },
+  branchName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary, marginBottom: 4 },
+  templateName: { fontSize: 12, color: Colors.textMuted },
+  templateMissing: { fontSize: 12, color: Colors.warning },
 });

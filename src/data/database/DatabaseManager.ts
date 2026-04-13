@@ -8,6 +8,7 @@ import {
   CREATE_TEMPLATES_TABLE,
   CREATE_TEMPLATE_PRODUCTS_TABLE,
   CREATE_TEMPLATE_EXPENSES_TABLE,
+  CREATE_EXPENSES_TABLE,
   CREATE_REPORT_STOCK_TABLE,
   CREATE_REPORT_SALES_TABLE,
   CREATE_REPORT_EXPENSES_TABLE,
@@ -36,6 +37,7 @@ class DatabaseManager {
     await this.db.execAsync(CREATE_TEMPLATES_TABLE);
     await this.db.execAsync(CREATE_TEMPLATE_PRODUCTS_TABLE);
     await this.db.execAsync(CREATE_TEMPLATE_EXPENSES_TABLE);
+    await this.db.execAsync(CREATE_EXPENSES_TABLE);
     await this.db.execAsync(CREATE_REPORT_STOCK_TABLE);
     await this.db.execAsync(CREATE_REPORT_SALES_TABLE);
     await this.db.execAsync(CREATE_REPORT_EXPENSES_TABLE);
